@@ -1,2 +1,2 @@
 # Statistic
-WW2 Bombings data analysis fro Statistic Classes
+WW2 Bombings data analysis for Statistic Classes
