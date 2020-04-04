@@ -1,0 +1,105 @@
+---
+title: "Aerial bomnings in World War II"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r echo=FALSE, message=FALSE}
+## Czynności przygotowawcze - załadowanie potrzebnych pakietów
+library(RSQLite)
+library(tidyverse)
+library(ggpubr)
+library(scales)
+df <- read.csv("C:/Paladin/Nauka/Statystyka/Bombing/THOR_WWII_DATA_CLEAN2.csv")
+conn <- dbConnect(RSQLite::SQLite(), "gtd.db")
+#dbWriteTable(conn, "Bombings", df)
+```
+
+# 1. Wstęp
+
+Raport zawiera analizę danych pochodzących z Data Base, zawierającej listę blisko 180 tys. bombardowań organizowane przez Amerykanów i Brytyczyków w ciągu Drugiej Wojny Światowej. Każde opisane jest przez najwyżej 65 zmiennych, określających m.in. datę ataku, jego lokalizację, kraj, który organizował bombardowanie, rodzaj samolotu, waga materiałów wybuchowych itd.
+
+# 2. Analiza wstępna/eksploracyjna
+
+## 2.1 Zależność ilośći bombardowań od czasu
+
+
+```{r echo=FALSE}
+tmp <- dbGetQuery(conn, "SELECT TGT_COUNTRY, strftime('1-%m-%Y', MSNDATE) as date  FROM Bombings WHERE TGT_COUNTRY is not NULL AND TGT_COUNTRY != '' AND TGT_COUNTRY NOT LIKE '%UNKNOWN%' AND date IS NOT NULL")
+tmp$date <- as.Date(tmp$date,format="%d-%m-%Y")
+tmp <- tmp %>% group_by(TGT_COUNTRY, date) %>% summarize(count = n())
+
+g <- ggplot(tmp, aes(x = date, y = count)) + 
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(x = "Date", y = "Number of Attacks") +
+  scale_x_date(labels = date_format("%m-%Y"))
+print(g)
+```
+## 2.2 Zależność ilośći bombardowań od czasu wybranych krajów
+
+``` {r echo = FALSE} 
+countries <- tmp %>% filter(TGT_COUNTRY == "DENMARK" || TGT_COUNTRY == "AUSTRIA" || TGT_COUNTRY == "BELGIUM" || TGT_COUNTRY == "FRANCE")
+
+g <- ggplot(countries, aes(x = date, y = count)) + 
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(x = "Date", y = "Number of Attacks") +
+  scale_x_date(labels = date_format("%m-%Y")) + facet_wrap(TGT_COUNTRY ~ ., nrow = 2, ncol = 2, scales ="free_y")
+print(g)
+```
+##OPIS 2.3 Najczęściej używane samołoty w ciągu wojny
+Jak widzimy, niektóre samoloty takie jak: były najczęściej używane ze względu na ich szeroką produkcja, wysoką wydajność i zdolność bojową.Dla przerzystośći popatrzymy na ten wykres bez wartośći odstających
+
+```{r echo=FALSE}
+tmp <- dbGetQuery(conn, "select  AIRCRAFT_NAME from Bombings where AIRCRAFT_NAME is not NULL AND AIRCRAFT_NAME != ''")
+tmp <- tmp %>% group_by(AIRCRAFT_NAME) %>% summarize(count = n())
+use<-tmp %>%arrange(desc(count)) %>% head(60)
+use<-ggplot(use,aes(AIRCRAFT_NAME,count)) + geom_point() +
+  labs(x = "Plane", y = "Number of uses")+
+ theme(axis.text.x=element_text(angle=90, hjust=1))
+
+print(use)
+```
+Sprobujemy popartzyć na wykreś beż liderów.
+```{r echo=FALSE}
+tmp <- dbGetQuery(conn, "select  AIRCRAFT_NAME from Bombings where AIRCRAFT_NAME is not NULL AND AIRCRAFT_NAME != ''")
+planes<-tmp %>% filter (AIRCRAFT_NAME !="A20" & (AIRCRAFT_NAME!="AUDAX") & (AIRCRAFT_NAME!="B17")&(AIRCRAFT_NAME!="B24")&(AIRCRAFT_NAME!="A36")&(AIRCRAFT_NAME!="B25")
+                        &(AIRCRAFT_NAME!="B26"))
+planes <- planes %>% group_by(AIRCRAFT_NAME) %>% summarize(count = n())
+planes<- planes %>% arrange(desc(count)) %>% head(60)
+planes<- ggplot(planes,aes(AIRCRAFT_NAME,count)) + geom_point() +
+  labs(x = "Plane", y = "Number of uses")+
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+print(planes)
+```
+
+Teraz interesuje nas  przynależność samolotów do poszczególnych krajów.Na pierwszym wykresie widzimy używałność samolotów USA,odpowiednio na drugim Wiełkiej Brytanji . Widzimy też że iłość wykorzystania samolotów USA,jest większe czym Brytanji.
+```{r echo=FALSE}
+tmp <- dbGetQuery(conn, "select  AIRCRAFT_NAME,COUNTRY_FLYING_MISSION from Bombings where AIRCRAFT_NAME is not NULL AND AIRCRAFT_NAME != ''")
+planesB<-tmp %>% filter (COUNTRY_FLYING_MISSION=='GREAT BRITAIN');
+planesU<-tmp %>% filter ((COUNTRY_FLYING_MISSION=='USA'))
+planesB <- planesB %>% group_by(AIRCRAFT_NAME) %>% summarize(count = n())
+planesB<- ggplot(planesB,aes(AIRCRAFT_NAME,count)) + geom_point() +
+  labs(x = "Plane", y = "Number of uses")+
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+planesU <- planesU %>% group_by(AIRCRAFT_NAME) %>% summarize(count = n())
+planesU<- ggplot(planesU,aes(AIRCRAFT_NAME,count)) + geom_point() +
+  labs(x = "Plane", y = "Number of uses")+
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+print(planesU)
+print(planesB)
+```
+Top 20  krajów pod względem iłośći bombardowań.Widzimy że wartośćią odstającą jest GERMANY na którą przypadło większość bombardowań,co zgadza się z moim wyobrażeniem na temat rzeczywistośći. 
+```{r echo=False}
+tmp <- dbGetQuery(conn, "SELECT TGT_COUNTRY  FROM Bombings WHERE TGT_COUNTRY is not NULL AND TGT_COUNTRY != '' AND TGT_COUNTRY NOT LIKE '%UNKNOWN%'")
+tmp <- tmp %>% group_by(TGT_COUNTRY) %>% summarize(count = n())
+tmp<-tmp %>% arrange(desc(count)) %>% head(20)
+g <- ggplot(tmp, aes(x = TGT_COUNTRY, y = count)) + 
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(x = "Country", y = "Number of Attacks")+
+  theme(axis.text.x=element_text(angle=90, hjust=1))
+print(g)
+```
